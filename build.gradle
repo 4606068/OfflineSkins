@@ -1,0 +1,69 @@
+plugins {
+    id 'fabric-loom' version '1.14-SNAPSHOT'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+}
+
+loom {
+    mixin {
+        defaultRefmapName = "${project.archives_base_name}-refmap.json"    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+}
+
+processResources {
+    inputs.property "version", project.version
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+    from("LICENSE.txt") {
+        rename { "${it}_${project.archives_base_name}" }    }
+}
+
+remapJar.doLast {
+    if (System.getenv('SIGNJAR_KEYSTORE') != null) {
+        def keystore = File.createTempFile('keystore-', '.jks', getTemporaryDir()).toString()
+
+        file(keystore).withOutputStream { output ->
+            output.write(Base64.getDecoder().decode(System.getenv('SIGNJAR_KEYSTORE')))
+        }
+        ant.signjar(
+                jar: archiveFile.get(),
+                signedJar: archiveFile.get(),
+                keystore: keystore,
+                alias: System.getenv('SIGNJAR_ALIAS'),
+                storepass: System.getenv('SIGNJAR_STOREPASS'),
+                keypass: System.getenv('SIGNJAR_KEYPASS'),
+                preservelastmodified: "true"
+        )
+
+        delete keystore
+    }
+}
